@@ -119,51 +119,50 @@ char			g_cFileNames[CLOCK_ELEMENTS][30] =
 	"clock-frame.svg"
 };
 
-RsvgDimensionData g_DimensionData;
-gint		  g_iSeconds;
-gint		  g_iMinutes;
-gint		  g_iHours;
-gint		  g_iDay;
-gint		  g_iMonth;
-gchar		  g_acDate[MAX_DATE_SIZE];
-static time_t	  g_timeOfDay;
-struct tm*	  g_pTime;
-gint		  g_i12			 = 0;	/* 12h hour-hand toggle       */
-gint		  g_i24			 = 0;	/* 24h hour-hand toggle       */
-gint		  g_iShowDate		 = 0;	/* date-display toggle        */
-gint		  g_iShowSeconds	 = 0;	/* seconds-hand toggle        */
-gint		  g_iDefaultX		 = -1;	/* x-pos of top-left corner   */
-gint		  g_iDefaultY		 = -1;	/* y-pos, < 0 means undefined */
-gint		  g_iDefaultWidth	 = 127;	/* clock-window used width ...*/
-gint		  g_iDefaultHeight	 = 127;	/* ... and height             */
+static RsvgDimensionData g_DimensionData;
+static gint		  g_i12			 = 0;	/* 12h hour-hand toggle       */
+static gint		  g_i24			 = 0;	/* 24h hour-hand toggle       */
+static gint		  g_iShowDate		 = 0;	/* date-display toggle        */
+static gint		  g_iShowSeconds	 = 0;	/* seconds-hand toggle        */
+static gint		  g_iDefaultX		 = -1;	/* x-pos of top-left corner   */
+static gint		  g_iDefaultY		 = -1;	/* y-pos, < 0 means undefined */
+static gint		  g_iDefaultWidth	 = 127;	/* clock-window used width ...*/
+static gint		  g_iDefaultHeight	 = 127;	/* ... and height             */
 static gchar*	  g_pcTheme;
-gchar		  g_acTheme[80]		 = "default\0";
-gint		  g_iKeepOnTop		 = 0;
-gint		  g_iAppearInPager	 = 0;
-gint		  g_iAppearInTaskbar	 = 0;
-gint		  g_iSticky		 = 0;
-GtkWidget*	  g_pMainWindow		 = NULL;
-GtkWidget*	  g_pPopUpMenu		 = NULL;
-GtkWidget*	  g_pSettingsDialog	 = NULL;
-GtkWidget*	  g_pInfoDialog		 = NULL;
-GtkWidget*	  g_pErrorDialog	 = NULL;
-GtkWidget*	  g_pTableStartupSize	 = NULL;
-GtkWidget*	  g_pComboBoxStartupSize = NULL;
-GtkWidget*	  g_pSpinButtonWidth	 = NULL;
-GtkWidget*	  g_pSpinButtonHeight	 = NULL;
-GtkWidget*	  g_pHScaleSmoothness	 = NULL;
-guint		  g_iuIntervalHandlerId	 = 0;
-gint		  g_iThemeCounter	 = 0;
-GList*		  g_pThemeList		 = NULL;
-gchar		  g_acAppName[]		 = "MacSlow's Cairo-Clock";
-gchar		  g_acAppVersion[]	 = "0.3.4";
-gboolean	  g_bNeedsUpdate	 = TRUE;
-cairo_surface_t*  g_pBackgroundSurface	 = NULL;
-cairo_surface_t*  g_pForegroundSurface	 = NULL;
-gint		  g_iRefreshRate	 = 30;
-GTimer*		  g_pTimer		 = NULL;
-gboolean	  bPrintThemeList	 = FALSE;
-gboolean	  bPrintVersion		 = FALSE;
+static gchar		  g_acTheme[80]		 = "default\0";
+static gint		  g_iKeepOnTop		 = 0;
+static gint		  g_iAppearInPager	 = 0;
+static gint		  g_iAppearInTaskbar	 = 0;
+static gint		  g_iSticky		 = 0;
+static GtkWidget*	  g_pMainWindow		 = NULL;
+static GtkWidget*	  g_pPopUpMenu		 = NULL;
+static GtkWidget*	  g_pSettingsDialog	 = NULL;
+static GtkWidget*	  g_pInfoDialog		 = NULL;
+static GtkWidget*	  g_pErrorDialog	 = NULL;
+static GtkWidget*	  g_pTableStartupSize	 = NULL;
+static GtkWidget*	  g_pComboBoxStartupSize = NULL;
+static GtkWidget*	  g_pSpinButtonWidth	 = NULL;
+static GtkWidget*	  g_pSpinButtonHeight	 = NULL;
+static GtkWidget*	  g_pHScaleSmoothness	 = NULL;
+static guint		  g_iuIntervalHandlerId	 = 0;
+static gint		  g_iThemeCounter	 = 0;
+static GList*		  g_pThemeList		 = NULL;
+static gchar		  g_acAppName[]		 = "MacSlow's Cairo-Clock";
+static gchar		  g_acAppVersion[]	 = PACKAGE_VERSION;
+static gboolean	  g_bNeedsUpdate	 = TRUE;
+static cairo_surface_t*  g_pBackgroundSurface	 = NULL;
+static cairo_surface_t*  g_pForegroundSurface	 = NULL;
+static gint		  g_iRefreshRate	 = 30;
+static GTimer*		  g_pTimer		 = NULL;
+static gboolean	  bPrintThemeList	 = FALSE;
+static gboolean	  bPrintVersion		 = FALSE;
+
+static double		g_fHalfX = 0.0f;
+static double		g_fHalfY = 0.0f;
+static gint			iSecondsPrev = -1;
+static gint			iMinutesPrev = -1;
+static gint			iHoursPrev = -1;
+static gint			iYdayPrev = -1;
 
 static void
 render (gint iWidth,
@@ -408,68 +407,87 @@ static void
 render (gint iWidth,
 	gint iHeight)
 {
-	static double		    fHalfX	      = 0.0f;
-	static double		    fHalfY	      = 0.0f;
+	static double			fAngleHour;
+	static double			fAngleMinute;
+	static double			fAngleSecond;
+	static gchar			acDate[MAX_DATE_SIZE];
+
 	static double		    fShadowOffsetX    = -0.75f;
 	static double		    fShadowOffsetY    = 0.75f;
 	static cairo_text_extents_t textExtents;
-	static double		    fFactor	      = 0.0f;
-	static gint		    iFrames	      = 0;
-	static gulong		    ulMilliSeconds    = 0;
-	static double		    fFullSecond	      = 0.0f;
-	static double		    fLastFullSecond   = 0.0f;
-	static double		    fCurrentTimeStamp = 0.0f;
-	static double		    fLastTimeStamp    = 0.0f;
-	static double		    fAngleSecond      = 0.0f;
-	static double		    fAngleMinute      = 0.0f;
-	static double		    fAngleHour        = 0.0f;
-	static gboolean		    bAnimateMinute    = FALSE;
-	static GDate*               date;
-	static GTimeVal             timeVal;
 
-	fFactor = powf ((float) iFrames /
-			(float) g_iRefreshRate *
-			0.875f *
-			3.4f,
-			3.0f) *
-		  sinf ((float) iFrames /
-			(float) g_iRefreshRate *
-			0.875f *
-			G_PI) *
-			0.1f;
+	struct timespec		clockTime;
+	struct tm			localTime;
+	gint				iMilliSeconds;
+	gint				iSeconds;
+	gint				iMinutes;
+	gint				iHours;
+	gint				iYday;
 
-	fHalfX = g_DimensionData.width / 2.0f;
-	fHalfY = g_DimensionData.height / 2.0f;
-
-	time (&g_timeOfDay);
-	g_pTime = localtime (&g_timeOfDay);
-	g_iSeconds = g_pTime->tm_sec;
-	g_iMinutes = g_pTime->tm_min;
-	g_iHours = g_pTime->tm_hour;
-
-	if (!bAnimateMinute)
-		fAngleMinute = (double) g_iMinutes * 6.0f;
-
-	if (!g_i24)
+	/*	get current time and date info, seconds since epoch and nanosecs in current sec  */
+	if (clock_gettime (CLOCK_REALTIME, &clockTime) != 0) 
 	{
-		g_iHours = g_iHours >= 12 ? g_iHours - 12 : g_iHours;
-		fAngleHour = (g_iSeconds + 60 * g_iMinutes + 3600 * (g_iHours % 12)) *
-			      360.0 /
-			      43200.0f;
-
+		printf (_("CLOCK_REALTIME invalid\n"));
+		exit (1);
 	}
-	else
-		fAngleHour = (g_iSeconds + 60 * g_iMinutes + 3600 * g_iHours) *
-			      360.0 /
-			      86400.0f;
 
-	date = g_date_new ();
-	g_date_clear (date, 1);
-	g_get_current_time (&timeVal);
-	g_date_set_time_val (date, &timeVal);
-	g_date_strftime (g_acDate, MAX_DATE_SIZE, "%x", date);
-	g_date_free (date);
+	/*	convert to millisecs, secs, mins, hours, day of year for current timezone  */
+	localTime = *localtime (&clockTime.tv_sec);
+	iMilliSeconds = clockTime.tv_nsec / 1000000;
+	iSeconds = localTime.tm_sec;
+	iMinutes = localTime.tm_min;
+	iHours = localTime.tm_hour;
+	iYday = localTime.tm_yday;
 
+	/*	recalc hour hand angle when minute changes, calc is forced on first time through
+		12 hour clock, hour = 0 to 11, minute = 0 to 59 each hour
+		=> hour angle deg = (360 / 12) * hour + (360 / (12*60)) * minute 
+		                    = (360 / (12*60)) * (hour*60 + minute) 
+		                    = 0.5 * (hour*60 + minute)
+		   ie. half degree movement per minute over 12 hour period
+
+		24 hour clock, hour = 0 to 23, minute = 0 to 59 each hour
+		=> hour angle deg = (360 / 24) * hour + (360 / (24*60)) * minute 
+		                    = (360 / (24*60)) * (hour*60 + minute) 
+		                    = 0.25 * (hour*60 + minute)
+		   ie. quarter degree movement per minute over 24 hour period
+	*/
+	if (iMinutesPrev != iMinutes)
+	{
+		fAngleHour = g_i24 ? ( ( iHours * 60 + iMinutes ) * 0.25 ) : ( ( (iHours % 12) * 60 + iMinutes ) * 0.5 ) ;
+	}
+
+	/*	recalc minute hand angle when second changes, calc is forced on first time through
+		minute = 0 to 59 each hour, second = 0 to 59 each minute
+		=> minute angle deg = (360 / 60) * minute + (360 / (60*60)) * second 
+		                    = (360 / (60*60)) * (minute*60 + second) 
+		                    = 0.1 * (minute*60 + second)
+		   ie. 0.1 degree movement per second over one hour period
+	*/
+	if (iSecondsPrev != iSeconds)
+	{
+		fAngleMinute = ( iMinutes * 60 + iSeconds ) * 0.1 ;
+	}
+
+	/*	calc seconds hand angle every update, if hand is set visible
+		second = 0 to 59 each minute, millisec = 0 to 999 each second
+		=> second angle deg = (360 / 60) * second + (360 / (60*1000)) * millisec
+		                    = (360 / (60*1000)) * ( second*1000 + millisec )
+		                    = 0.006 * (second*1000 + millisec)
+		   ie. 0.006 degree movement per millisecond over 1 minute period
+	*/
+	if (g_iShowSeconds)
+	{
+		fAngleSecond = ( iSeconds * 1000 + iMilliSeconds ) * 0.006 ;
+	}
+
+	/*	rebuild date string when day changes, calc is forced on first time through  */
+	if (iYdayPrev != iYday)
+	{
+		strftime (acDate, MAX_DATE_SIZE, "%x", &localTime);
+	}
+
+	/*	initialise display context with background image  */
 	cairo_set_operator (g_pMainContext, CAIRO_OPERATOR_SOURCE);
 
 	cairo_set_source_surface (g_pMainContext,
@@ -478,29 +496,34 @@ render (gint iWidth,
 				  0.0f);
 	cairo_paint (g_pMainContext);
 
+	/*	following operations will all paint over the top of previous layers  */
 	cairo_set_operator (g_pMainContext, CAIRO_OPERATOR_OVER);
 
 	cairo_save (g_pMainContext);
+
+	/*	scale, translate, rotate display context ready for date and clock hand overlays  */
 	cairo_scale (g_pMainContext,
 		     (double) iWidth / (double) g_DimensionData.width,
 		     (double) iHeight / (double) g_DimensionData.height);
-	cairo_translate (g_pMainContext, fHalfX, fHalfY);
+	cairo_translate (g_pMainContext, g_fHalfX, g_fHalfY);
 	cairo_rotate (g_pMainContext, -M_PI/2.0f);
 
+	/*	add date text if date is set visible  */
 	if (g_iShowDate)
 	{
 		cairo_save (g_pMainContext);
 		cairo_set_source_rgb (g_pMainContext, 1.0f, 0.5f, 0.0f);
 		cairo_set_line_width (g_pMainContext, 5.0f);
-		cairo_text_extents (g_pMainContext, g_acDate, &textExtents);
+		cairo_text_extents (g_pMainContext, acDate, &textExtents);
 		cairo_rotate (g_pMainContext, (M_PI/180.0f) * 90.0f);
 		cairo_move_to (g_pMainContext,
 			       -textExtents.width / 2.0f,
 			       2.0f * textExtents.height);
-		cairo_show_text (g_pMainContext, g_acDate);
+		cairo_show_text (g_pMainContext, acDate);
 		cairo_restore (g_pMainContext);
 	}
 
+	/*	add shadow for hour hand  */
 	cairo_save (g_pMainContext);
 	cairo_translate (g_pMainContext, fShadowOffsetX, fShadowOffsetY);
 	cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleHour);
@@ -510,34 +533,22 @@ render (gint iWidth,
 
 	cairo_restore (g_pMainContext);
 
+	/*	add shadow for minute hand  */
 	cairo_save (g_pMainContext);
 	cairo_translate (g_pMainContext, fShadowOffsetX, fShadowOffsetY);
-
-	if (bAnimateMinute)
-	{
-		cairo_rotate (g_pMainContext,
-			      G_PI / 180.0f * (fAngleMinute + fFactor * 6.0f));
-		if (fFactor >= 0.95f)
-		{
-			bAnimateMinute = FALSE;
-			fAngleMinute = (double) g_iMinutes * 6.0f;
-		}
-	}
-	else
-		cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleMinute);
+	cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleMinute);
 
 	rsvg_handle_render_cairo (g_pSvgHandles[CLOCK_MINUTE_HAND_SHADOW],
 				  g_pMainContext);
 
 	cairo_restore (g_pMainContext);
 
+	/*	add shadow for seconds hand, if hand is set visible  */
 	if (g_iShowSeconds)
 	{
 		cairo_save (g_pMainContext);
 		cairo_translate (g_pMainContext, fShadowOffsetX, fShadowOffsetY);
-		cairo_rotate (g_pMainContext,
-			      G_PI / 180.0f *
-			      (fAngleSecond + fFactor * 6.0f));
+		cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleSecond);
 
 		rsvg_handle_render_cairo (g_pSvgHandles[CLOCK_SECOND_HAND_SHADOW],
 					  g_pMainContext);
@@ -545,6 +556,7 @@ render (gint iWidth,
 		cairo_restore (g_pMainContext);
 	}
 
+	/*	add hour hand  */
 	cairo_save (g_pMainContext);
 	cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleHour);
 
@@ -553,38 +565,27 @@ render (gint iWidth,
 
 	cairo_restore (g_pMainContext);
 
+	/*	add minute hand  */
 	cairo_save (g_pMainContext);
-
-	if (bAnimateMinute)
-	{
-		cairo_rotate (g_pMainContext,
-			      G_PI / 180.0f * (fAngleMinute + fFactor * 6.0f));
-		if (fFactor >= 0.95f)
-		{
-			bAnimateMinute = FALSE;
-			fAngleMinute = (double) g_iMinutes * 6.0f;
-		}
-	}
-	else
-		cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleMinute);
+	cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleMinute);
 
 	rsvg_handle_render_cairo (g_pSvgHandles[CLOCK_MINUTE_HAND],
 				  g_pMainContext);
 
 	cairo_restore (g_pMainContext);
 
+	/*	add seconds hand, if hand is set visible  */
 	if (g_iShowSeconds)
 	{
 		cairo_save (g_pMainContext);
-		cairo_rotate (g_pMainContext,
-			      G_PI / 180.0f *
-			      (fAngleSecond + fFactor * 6.0f));
+ 		cairo_rotate (g_pMainContext, G_PI / 180.0f * fAngleSecond);
 
 		rsvg_handle_render_cairo (g_pSvgHandles[CLOCK_SECOND_HAND],
 					  g_pMainContext);
 		cairo_restore (g_pMainContext);
 	}
 
+	/*	pop display context to original scale, translate, rotate, then add forgeground overlay  */
 	cairo_restore (g_pMainContext);
 
 	cairo_set_source_surface (g_pMainContext,
@@ -593,35 +594,11 @@ render (gint iWidth,
 				  0.0f);
 	cairo_paint (g_pMainContext);
 
-	/* get the current time-stamp */
-	fCurrentTimeStamp = g_timer_elapsed (g_pTimer,
-					     &ulMilliSeconds);
-	ulMilliSeconds /= 1000;
-	fFullSecond = fCurrentTimeStamp - fLastFullSecond;
-
-	/* take care of the clock-hands anim-vars */
-	if (fFullSecond < 1.0f)
-		iFrames++;
-	else
-	{
-		iFrames = 0;
-		fLastFullSecond = fCurrentTimeStamp;
-
-		fAngleSecond = (double) g_iSeconds * 6.0f;
-
-		if (fAngleSecond == 360.0f)
-			fAngleSecond = 0.0f;
-
-		if (fAngleSecond == 354.0f)
-			bAnimateMinute = TRUE;
-
-		if (fAngleSecond == 360.0f)
-			fAngleSecond = 0.0f;
-
-		if (fAngleMinute == 360.0f)
-			fAngleMinute = 0.0f;
-	}
-	fLastTimeStamp = fCurrentTimeStamp;
+	/*	save secs, mins, hours, day of year for comparison next update  */
+	iSecondsPrev = iSeconds;
+	iMinutesPrev = iMinutes;
+	iHoursPrev = iHours;
+	iYdayPrev = iYday;
 }
 
 static void
@@ -802,6 +779,11 @@ on_24h_toggled (GtkToggleButton* pTogglebutton,
 		g_i24 = 1;
 	else
 		g_i24 = 0;
+
+	/*	force full recalc of clock hand angles  */
+	iSecondsPrev = -1;
+	iMinutesPrev = -1;
+	iHoursPrev = -1;
 }
 
 static void
@@ -1076,6 +1058,8 @@ change_theme (GList*	 pThemeList,
 	/* update size-info of loaded theme */
 	rsvg_handle_get_dimensions (g_pSvgHandles[CLOCK_DROP_SHADOW],
 				    &g_DimensionData);
+	g_fHalfX = g_DimensionData.width / 2.0f;
+	g_fHalfY = g_DimensionData.height / 2.0f;
 
 	if (pWindow)
 		gtk_widget_queue_draw (pWindow);
@@ -1588,6 +1572,8 @@ main (int    argc,
 
 	rsvg_handle_get_dimensions (g_pSvgHandles[CLOCK_DROP_SHADOW],
 				    &g_DimensionData);
+	g_fHalfX = g_DimensionData.width / 2.0f;
+	g_fHalfY = g_DimensionData.height / 2.0f;
 
 	gtk_window_set_decorated (GTK_WINDOW (g_pMainWindow), FALSE);
 	gtk_window_set_resizable (GTK_WINDOW (g_pMainWindow), TRUE);
